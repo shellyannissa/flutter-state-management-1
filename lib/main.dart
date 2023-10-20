@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 
 void main() {
   runApp(const MyApp());
@@ -39,32 +40,41 @@ class MyApp extends StatelessWidget {
 }
 
 class Contact {
+  final id;
   final String name;
-  const Contact({
+  Contact({
     required this.name,
-  });
+  }) : id = const Uuid().v4;
 }
 
-class ContactBook {
+class ContactBook extends ValueNotifier<List<Contact>> {
   //creating only a single object of this class globally
-  ContactBook._sharedInstance();
+  ContactBook._sharedInstance() : super([]);
+  //ValueNotifier instance should be given an initial value hence the empty list
   static final ContactBook _shared = ContactBook._sharedInstance();
   factory ContactBook() => _shared;
 
-  final List<Contact> _contacts = [const Contact(name: 'Foo Bar')];
-
-  int get length => _contacts.length;
+  int get length => value.length;
 
   void add({required Contact contact}) {
-    _contacts.add(contact);
+    final contacts = value;
+    contacts.add(contact);
+    notifyListeners();
+
+    //by default listeners would have been notified if value was changed, however for an array adding a new
+    //value to it does not create a new instance and thus no value change. therefore notfiyListeners() called explicitly
   }
 
   void remove({required Contact contact}) {
-    _contacts.remove(contact);
+    final contacts = value;
+    if (contacts.contains(contact)) {
+      contacts.remove(contact);
+      notifyListeners();
+    }
   }
 
   Contact? contact({required int atIndex}) =>
-      _contacts.length > atIndex ? _contacts[atIndex] : null;
+      value.length > atIndex ? value[atIndex] : null;
 }
 
 class HomePage extends StatelessWidget {
@@ -77,12 +87,28 @@ class HomePage extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Home Page'),
       ),
-      body: ListView.builder(
-        itemCount: contactBook.length,
-        itemBuilder: (context, index) {
-          final contact = contactBook.contact(atIndex: index)!;
-          return ListTile(
-            title: Text(contact.name),
+      body: ValueListenableBuilder(
+        valueListenable: ContactBook(),
+        builder: (contact, value, child) {
+          final contacts = value;
+          return ListView.builder(
+            itemCount: contacts.length,
+            itemBuilder: (context, index) {
+              final contact = contacts[index];
+              return Dismissible(
+                onDismissed: (direction) {
+                  ContactBook().remove(contact: contact);
+                },
+                key: ValueKey(contact.id),
+                child: Material(
+                  color: Colors.white,
+                  elevation: 6.0,
+                  child: ListTile(
+                    title: Text(contact.name),
+                  ),
+                ),
+              );
+            },
           );
         },
       ),
@@ -129,7 +155,7 @@ class _NewContactViewState extends State<NewContactView> {
             TextField(
               controller: _controller,
               decoration: const InputDecoration(
-                  hintText: 'Enter a new contact namem here'),
+                  hintText: 'Enter a new contact name here'),
             ),
             TextButton(
                 onPressed: () {
